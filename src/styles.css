@@ -852,11 +852,6 @@ html { background: var(--wood-2); }
   padding-top: 14px;
 }
 .hand-group { display: flex; position: relative; }
-/* Las cartas se enciman lo justo para que entren las 8 */
-.hand-group .card + .card {
-  margin-left: min(4px, calc((100cqw - var(--n) * var(--w) - var(--gaps)) / (var(--n) - 1)));
-}
-.chinchon .my-hand { container-type: inline-size; }
 .hand-group.is-meld::after {
   content: '';
   position: absolute;
@@ -939,7 +934,11 @@ html { background: var(--wood-2); }
   border-radius: 8px;
   outline-offset: 3px;
 }
-.hand-slot + .hand-slot { margin-left: min(4px, calc((100cqw - var(--n) * var(--w)) / (var(--n) - 1))); }
+.hand-slot + .hand-slot { margin-left: var(--step, 4px); }
+.chinchon .my-hand { justify-content: flex-start; padding-left: 3px; padding-right: 3px; }
+/* Centradas si sobran lugar; si no, arrancan desde el borde (nunca se cortan) */
+.chinchon .my-hand > .hand-slot:first-child { margin-left: auto; }
+.chinchon .my-hand > .hand-slot:last-child { margin-right: auto; }
 .hand-slot.in-meld::after {
   content: '';
   position: absolute;
@@ -971,3 +970,17 @@ html { background: var(--wood-2); }
   0%, 60% { box-shadow: 0 0 0 3px #7fd6a0, 0 10px 18px rgb(0 0 0 / 0.4); }
 }
 .hand-slot.is-pending .card { animation: fresh-in 0.18s ease-out both; box-shadow: 0 0 0 3px #7fd6a0, 0 10px 18px rgb(0 0 0 / 0.4); }
+
+/* iPhone: la página no se desplaza (así iOS no difumina la parte de arriba); se desplaza el contenido */
+html, body { height: 100%; overflow: hidden; }
+#root {
+  position: fixed;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+/* La mano nunca más ancha que la pantalla: así las cartas se enciman en vez de salirse */
+.table.chinchon { grid-template-columns: minmax(0, 1fr); }
+.chinchon .my-hand { min-width: 0; width: 100%; overflow: visible; }

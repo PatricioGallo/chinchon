@@ -26,6 +26,13 @@ function lastMove(log, me, names) {
   return null
 }
 
+/** Separación entre cartas de la mano (negativa = se enciman). */
+function handStep(width, n) {
+  if (!width || n < 2) return 4
+  const w = Math.min(window.innerWidth * 0.21, 86)
+  return Math.min(4, (width - 6 - n * w) / (n - 1))
+}
+
 function ScoreBar({ score, limit }) {
   const ratio = Math.max(0, Math.min(1, score / limit))
   return (
@@ -154,6 +161,23 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
     dragFns.start()
   }
   useEffect(() => dragFns.stop, [dragFns])
+
+  // Cuánto se enciman las cartas para que entren todas (calculado, no depende del navegador)
+  const handRef = useRef(null)
+  const [handWidth, setHandWidth] = useState(0)
+  useEffect(() => {
+    const el = handRef.current
+    if (!el) return
+    const measure = () => setHandWidth(el.clientWidth)
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(el)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
 
   const shown = useMemo(() => {
     const base = order.filter((c) => hand.includes(c))
@@ -301,7 +325,7 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
         )}
       </section>
 
-      <section className={`my-hand ${drag ? 'is-dragging' : ''}`} style={{ '--n': shown.length + (pendingDraw ? 1 : 0) }}>
+      <section ref={handRef} className={`my-hand ${drag ? 'is-dragging' : ''}`} style={{ '--step': `${handStep(handWidth, shown.length + (pendingDraw ? 1 : 0))}px` }}>
         {shown.map((id) => (
           <div
             key={id}
