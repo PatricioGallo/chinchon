@@ -77,6 +77,12 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
   const best = useMemo(() => bestMelds(hand), [handKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const suggestion = useMemo(() => [...best.melds.flat(), ...sortLoose(best.loose)], [best])
   const inMeld = useMemo(() => new Set(best.melds.flat()), [best])
+  // A qué combinación pertenece cada carta (para cortar la barra donde termina la jugada)
+  const meldOf = useMemo(() => {
+    const map = new Map()
+    best.melds.forEach((g, i) => g.forEach((c) => map.set(c, i)))
+    return map
+  }, [best])
   const [order, setOrder] = useState(suggestion)
   useEffect(() => {
     setOrder((prev) => {
@@ -326,11 +332,15 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
       </section>
 
       <section ref={handRef} className={`my-hand ${drag ? 'is-dragging' : ''}`} style={{ '--step': `${handStep(handWidth, shown.length + (pendingDraw ? 1 : 0))}px` }}>
-        {shown.map((id) => (
+        {shown.map((id, i) => {
+          const next = i + 1 < shown.length ? shown[i + 1] : pendingDraw ? 'pendiente' : null
+          // Última carta de la jugada con otra carta encimada encima: la barra llega sólo hasta donde se ve
+          const meldEnd = inMeld.has(id) && next !== null && meldOf.get(next) !== meldOf.get(id)
+          return (
           <div
             key={id}
             ref={(el) => (slotRefs.current[id] = el)}
-            className={`hand-slot ${inMeld.has(id) ? 'in-meld' : ''} ${drag?.id === id ? 'is-held' : ''}`}
+            className={`hand-slot ${inMeld.has(id) ? 'in-meld' : ''} ${meldEnd ? 'meld-end' : ''} ${drag?.id === id ? 'is-held' : ''}`}
             role="button"
             tabIndex={0}
             aria-label={`${cardName(id)}${selected === id ? ', elegida' : ''}`}
@@ -344,7 +354,8 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
           >
             <Card id={id} size="hand" selected={selected === id} className={fresh === id ? 'is-fresh' : ''} />
           </div>
-        ))}
+          )
+        })}
         {pendingDraw && (
           <div className="hand-slot is-pending" aria-label="Recibiendo carta">
             <Card id={null} size="hand" />
