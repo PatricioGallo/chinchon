@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { displayName } from '../api/shared.js'
 import { CPU_NAMES } from '../roomText.js'
+import { LIMITS } from '../engine/game.js'
 
 /** Armar una partida con amigos: cuántos juegan y quién va en cada lugar. */
 export default function NewOnline({ friends, preset, onCreate, onBack }) {
   const [players, setPlayers] = useState(2)
+  const [limit, setLimit] = useState(100)
   const presetValue = preset ? `friend:${preset.id}` : null
   // Lugares 1..5 (el 0 sos vos)
   const [seats, setSeats] = useState({ 1: presetValue ?? 'open', 2: 'open', 3: 'open', 4: 'open', 5: 'open' })
@@ -26,7 +28,7 @@ export default function NewOnline({ friends, preset, onCreate, onBack }) {
         const v = seats[s]
         list.push(v === 'cpu' ? 'cpu' : v === 'open' ? null : { userId: v.slice(7) })
       }
-      await onCreate({ players, seats: list })
+      await onCreate({ players, limit, seats: list })
     } catch (e) {
       setError(e.message)
       setBusy(false)
@@ -44,6 +46,15 @@ export default function NewOnline({ friends, preset, onCreate, onBack }) {
       <div className="segmented segmented-6" role="tablist">
         {[2, 3, 4, 5, 6].map((k) => (
           <button key={k} role="tab" aria-selected={players === k} onClick={() => setPlayers(k)}>
+            {k}
+          </button>
+        ))}
+      </div>
+
+      <p className="field-label">¿Hasta cuántos puntos?</p>
+      <div className="segmented segmented-4" role="tablist">
+        {LIMITS.map((k) => (
+          <button key={k} role="tab" aria-selected={limit === k} onClick={() => setLimit(k)}>
             {k}
           </button>
         ))}

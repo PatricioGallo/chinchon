@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
           if (!invited.every((id: string) => ok.has(id))) throw new UserError('Solo podés invitar a tus amigos.')
         }
         for (let attempt = 0; attempt < 5; attempt++) {
-          const room = createRoom({ id: crypto.randomUUID(), code: newCode(), hostId: userId, players, seats })
+          const room = createRoom({ id: crypto.randomUUID(), code: newCode(), hostId: userId, players, limit: Number(body.limit) || 100, seats })
           try {
             await save(room, null)
             return json({ view: viewForUser(room, userId) })

@@ -20,7 +20,7 @@ export function newCode(random = Math.random) {
  * @param seats lista por asiento: { userId } invitado/anfitrión, 'cpu' o null (libre para quien tenga el código)
  * El anfitrión siempre es el asiento 0.
  */
-export function createRoom({ id, code, hostId, players = 2, seats, now = Date.now() }) {
+export function createRoom({ id, code, hostId, players = 2, limit = 100, seats, now = Date.now() }) {
   players = Number(players)
   if (!(players >= 2 && players <= 6)) throw new Error('Se juega de 2 a 6')
   const list = Array.from({ length: players }, (_, s) => (s === 0 ? { userId: hostId } : seats?.[s] ?? null))
@@ -29,6 +29,7 @@ export function createRoom({ id, code, hostId, players = 2, seats, now = Date.no
     code,
     hostId,
     players,
+    limit: [100, 75, 50, 25].includes(Number(limit)) ? Number(limit) : 100,
     status: 'waiting', // waiting | playing | finished | cancelled
     seats: list.map((x) =>
       x === 'cpu' ? { type: 'cpu' } : x?.userId ? { type: 'user', userId: x.userId, joined: x.userId === hostId } : { type: 'open' }
@@ -47,7 +48,7 @@ export const memberIds = (room) => room.seats.filter((s) => s.type === 'user' &&
 function maybeStart(room) {
   if (room.status === 'waiting' && room.seats.every((s) => s.type === 'cpu' || (s.type === 'user' && s.joined))) {
     room.status = 'playing'
-    room.match = deal(createMatch({ players: room.players }))
+    room.match = deal(createMatch({ players: room.players, limit: room.limit ?? 100 }))
     runCpu(room)
   }
   return room
@@ -142,6 +143,7 @@ export function timeoutRoom(prev, userId, now = Date.now()) {
     if (seat !== -1) {
       room.match = apply(m, seat, chooseAction(viewFor(m, seat), seat))
       room.match.log.push({ t: 'timeout', seat })
+      room.match.moves = (room.match.moves ?? 0) + 1
     }
   }
   runCpu(room)
@@ -158,6 +160,7 @@ export function viewForUser(room, userId) {
     id: room.id,
     code: room.code,
     players: room.players,
+    limit: room.limit ?? 100,
     hostId: room.hostId,
     status: room.status,
     seats: room.seats,

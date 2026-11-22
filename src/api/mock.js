@@ -155,11 +155,11 @@ const me = () => {
   return id
 }
 
-export async function createRoom({ players, seats }) {
+export async function createRoom({ players, limit, seats }) {
   await net()
   const d = db()
   const uid = me()
-  const room = rooms.createRoom({ id: crypto.randomUUID(), code: rooms.newCode(), hostId: uid, players, seats })
+  const room = rooms.createRoom({ id: crypto.randomUUID(), code: rooms.newCode(), hostId: uid, players, limit, seats })
   persist(d, room)
   return rooms.viewForUser(room, uid)
 }

@@ -15,12 +15,16 @@ const LOG_MAX = 40
 
 const clone = (x) => JSON.parse(JSON.stringify(x))
 const push = (m, entry) => {
+  m.moves = (m.moves ?? 0) + 1 // contador de jugadas (el historial se recorta, esto no)
   m.log.push(entry)
   if (m.log.length > LOG_MAX) m.log.splice(0, m.log.length - LOG_MAX)
 }
 
+export const LIMITS = [100, 75, 50, 25]
+
 export function createMatch({ players = 2, limit = 100 } = {}) {
   if (players < 2 || players > 6) throw new Error('Se juega de 2 a 6')
+  if (!LIMITS.includes(limit)) limit = 100
   return {
     players,
     limit,
@@ -234,6 +238,7 @@ export function viewFor(m, seat) {
     handNo: m.handNo,
     winner: m.winner,
     log: m.log,
+    moves: m.moves ?? 0,
     me: seat,
     hand: h && {
       turn: h.turn,

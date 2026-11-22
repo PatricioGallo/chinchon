@@ -913,7 +913,8 @@ html { background: var(--wood-2); }
 /* Inicio y armado de partidas */
 .field-label { margin: 0; font-size: 0.88rem; font-weight: 700; color: var(--text-dim); }
 .segmented-6 { grid-template-columns: repeat(5, 1fr); }
-.segmented-6 button { font-family: 'Alfa Slab One', serif; font-weight: 400; font-size: 1.15rem; }
+.segmented-4 { grid-template-columns: repeat(4, 1fr); }
+.segmented-6 button, .segmented-4 button { font-family: 'Alfa Slab One', serif; font-weight: 400; font-size: 1.15rem; }
 .mode-wide { width: 100%; }
 
 @media (max-height: 760px) {
@@ -921,3 +922,52 @@ html { background: var(--wood-2); }
   .card-pile { --w: min(18vw, 76px); }
 }
 .felt-piles .turn-text { color: var(--cream); font-size: 0.98rem; white-space: normal; text-align: center; }
+
+/* ---------- Mano acomodable y arrastre ---------- */
+.me-bar { grid-template-columns: auto 1fr auto auto; }
+.chip-sort { padding: 5px 10px; font-size: 0.8rem; }
+.chinchon .my-hand { gap: 0; }
+.hand-slot {
+  --w: min(21vw, 86px);
+  position: relative;
+  flex: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grab;
+  border-radius: 8px;
+  outline-offset: 3px;
+}
+.hand-slot + .hand-slot { margin-left: min(4px, calc((100cqw - var(--n) * var(--w)) / (var(--n) - 1))); }
+.hand-slot.in-meld::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: -8px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--brass-2);
+}
+.hand-slot.is-held { opacity: 0.25; }
+.hand-slot img { pointer-events: none; }
+.drag-ghost {
+  position: fixed;
+  z-index: 70;
+  pointer-events: none;
+  transform: rotate(-4deg) scale(1.08);
+  filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.5));
+}
+.drag-ghost .card { --w: 100%; width: 100%; }
+.drag-tip { margin: -4px 0 0; text-align: center; font-size: 0.82rem; font-weight: 700; color: var(--text-dim); }
+.pile-discard.is-drop .pile-stack > .card,
+.pile-discard.is-drop .pile-empty { box-shadow: 0 0 0 4px #7fd6a0, 0 10px 22px rgb(0 0 0 / 0.45); transform: scale(1.06); }
+.pile-discard.is-nodrop .pile-stack > .card { box-shadow: 0 0 0 4px #ff7a6b; }
+/* La carta nueva aparece al toque (y da vuelta cuando llega del servidor) */
+.chinchon .my-hand .card.is-fresh { animation: fresh-in 0.22s ease-out both, fresh-ring 1.8s ease both; }
+@keyframes fresh-in { from { transform: rotateY(80deg) translateY(-10px); } }
+@keyframes fresh-ring {
+  0%, 60% { box-shadow: 0 0 0 3px #7fd6a0, 0 10px 18px rgb(0 0 0 / 0.4); }
+}
+.hand-slot.is-pending .card { animation: fresh-in 0.18s ease-out both; box-shadow: 0 0 0 3px #7fd6a0, 0 10px 18px rgb(0 0 0 / 0.4); }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as api from '@api'
-import { legalActions } from './engine/game.js'
+import { legalActions, LIMITS } from './engine/game.js'
 import { useLocalMatch, savedLocalMatch, LOCAL_NAMES } from './useLocalMatch.js'
 import { roomTitle } from './roomText.js'
 import { displayName } from './api/shared.js'
@@ -70,6 +70,7 @@ function Main({ profile, setProfile }) {
   const [initialLocal] = useState(() => savedLocalMatch()?.match ?? null)
   const local = useLocalMatch(initialLocal)
   const [localPlayers, setLocalPlayers] = useState(() => initialLocal?.players ?? 2)
+  const [localLimit, setLocalLimit] = useState(() => initialLocal?.limit ?? 100)
 
   // Amigos
   const [friends, setFriends] = useState({ friends: [], incoming: [], outgoing: [] })
@@ -143,7 +144,7 @@ function Main({ profile, setProfile }) {
           bubbles={local.bubbles}
           onAct={(a) => local.act(local.me, a)}
           onNextHand={local.nextHand}
-          onRestart={() => local.restart(n)}
+          onRestart={() => local.restart(n, local.match.limit)}
           onQuit={() => (local.quit(), go('home'))}
           onBack={() => go('home')}
           timer={local.timer}
@@ -209,8 +210,10 @@ function Main({ profile, setProfile }) {
         rooms={Object.values(rooms)}
         local={local}
         localPlayers={localPlayers}
+        localLimit={localLimit}
+        setLocalLimit={setLocalLimit}
         setLocalPlayers={setLocalPlayers}
-        onLocal={(players) => (local.restart(players), go('local'))}
+        onLocal={(players) => (local.restart(players, localLimit), go('local'))}
         onResumeLocal={() => go('local')}
         onFriends={() => go('friends')}
         onNew={() => go('new')}
@@ -225,7 +228,7 @@ function Main({ profile, setProfile }) {
   )
 }
 
-function Home({ profile, friends, rooms, local, localPlayers, setLocalPlayers, onLocal, onResumeLocal, onFriends, onNew, onProfile, onOpenRoom, onJoinCode, people, notif, notifHandlers }) {
+function Home({ profile, friends, rooms, local, localPlayers, setLocalPlayers, localLimit, setLocalLimit, onLocal, onResumeLocal, onFriends, onNew, onProfile, onOpenRoom, onJoinCode, people, notif, notifHandlers }) {
   const [code, setCode] = useState('')
   const [codeError, setCodeError] = useState('')
   const invites = rooms.filter((r) => r.status === 'waiting' && r.seats[r.mySeat]?.type === 'user' && !r.seats[r.mySeat].joined)
@@ -310,7 +313,7 @@ function Home({ profile, friends, rooms, local, localPlayers, setLocalPlayers, o
             {active.map((r) => (
               <button key={r.id} className="room-row" onClick={() => onOpenRoom(r.id)}>
                 <span>
-                  {roomTitle(r.players)}{' '}
+                  {roomTitle(r.players, r.limit)}{' '}
                   <span className="muted">
                     {r.status === 'waiting'
                       ? `esperando jugadores (${r.code})`
@@ -343,6 +346,14 @@ function Home({ profile, friends, rooms, local, localPlayers, setLocalPlayers, o
         <div className="segmented segmented-6" role="tablist">
           {[2, 3, 4, 5, 6].map((k) => (
             <button key={k} role="tab" aria-selected={localPlayers === k} onClick={() => setLocalPlayers(k)}>
+              {k}
+            </button>
+          ))}
+        </div>
+        <p className="field-label">¿Hasta cuántos puntos?</p>
+        <div className="segmented segmented-4" role="tablist">
+          {LIMITS.map((k) => (
+            <button key={k} role="tab" aria-selected={localLimit === k} onClick={() => setLocalLimit(k)}>
               {k}
             </button>
           ))}

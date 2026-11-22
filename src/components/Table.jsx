@@ -35,7 +35,7 @@ function ScoreBar({ score, limit }) {
   )
 }
 
-export default function Table({ view, me, actions, names, bubbles = {}, onAct, onNextHand, onRestart, onQuit, onBack, onLeave, timer }) {
+export default function Table({ view, me, actions, names, bubbles = {}, onAct, onNextHand, onRestart, onQuit, onBack, onLeave, timer, pendingDraw = false }) {
   const m = view
   const h = m.hand
   const n = m.players
@@ -61,16 +61,107 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
     prevHand.current = hand
     if (added.length === 1) {
       setFresh(added[0])
-      const t = setTimeout(() => setFresh(null), 2200)
+      const t = setTimeout(() => setFresh(null), 1800)
       return () => clearTimeout(t)
     }
   }, [handKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // La mano ordenada: primero las combinaciones, después las sueltas
-  const arranged = useMemo(() => {
-    const best = bestMelds(hand)
-    return { groups: [...best.melds, ...(best.loose.length ? [sortLoose(best.loose)] : [])], meldCount: best.melds.length, points: best.points }
+  // Orden de la mano: arranca con la sugerencia (combinaciones primero) y después lo maneja el jugador
+  const best = useMemo(() => bestMelds(hand), [handKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const suggestion = useMemo(() => [...best.melds.flat(), ...sortLoose(best.loose)], [best])
+  const inMeld = useMemo(() => new Set(best.melds.flat()), [best])
+  const [order, setOrder] = useState(suggestion)
+  useEffect(() => {
+    setOrder((prev) => {
+      const kept = prev.filter((c) => hand.includes(c))
+      if (kept.length < Math.min(3, hand.length)) return suggestion // mano nueva
+      return [...kept, ...hand.filter((c) => !kept.includes(c))]
+    })
   }, [handKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const isSuggested = order.join(',') === suggestion.join(',')
+
+  // Arrastrar: para acomodar la mano o para tirar la carta al pozo
+  const slotRefs = useRef({})
+  const pileRef = useRef(null)
+  const press = useRef(null)
+  const [drag, setDrag] = useState(null)
+  const live = useRef()
+  live.current = { order, discardable, discardPhase, onAct }
+
+  // Los manejadores se crean una sola vez (leen todo desde refs) para poder sacarlos bien
+  const dragFns = useMemo(() => {
+    const where = (p, x, y) => {
+      const pr = pileRef.current?.getBoundingClientRect()
+      const overPile = !!pr && x > pr.left - 16 && x < pr.right + 16 && y > pr.top - 16 && y < pr.bottom + 16
+      const index = live.current.order.filter((c) => c !== p.id).filter((c) => p.centers[c] < x).length
+      return { overPile, index }
+    }
+    const stop = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+    }
+    const onMove = (e) => {
+      const p = press.current
+      if (!p) return
+      if (!p.dragging && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 8) return
+      p.dragging = true
+      e.preventDefault()
+      setDrag({ id: p.id, x: e.clientX, y: e.clientY, w: p.w, h: p.h, ...where(p, e.clientX, e.clientY) })
+    }
+    const onCancel = () => {
+      stop()
+      press.current = null
+      setDrag(null)
+    }
+    const onUp = (e) => {
+      stop()
+      const p = press.current
+      press.current = null
+      setDrag(null)
+      if (!p) return
+      const L = live.current
+      if (!p.dragging) {
+        if (L.discardPhase) setSelected((s) => (s === p.id ? null : p.id))
+        return
+      }
+      const { overPile, index } = where(p, e.clientX, e.clientY)
+      if (overPile) {
+        if (L.discardPhase && L.discardable.includes(p.id)) L.onAct({ type: 'discard', card: p.id })
+        return
+      }
+      const rest = L.order.filter((c) => c !== p.id)
+      rest.splice(index, 0, p.id)
+      setOrder(rest)
+    }
+    const start = () => {
+      stop()
+      window.addEventListener('pointermove', onMove, { passive: false })
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onCancel)
+    }
+    return { start, stop }
+  }, [])
+  const onPointerDown = (e, id) => {
+    if (e.button !== undefined && e.button !== 0) return
+    const centers = {}
+    for (const c of order) {
+      const r = slotRefs.current[c]?.getBoundingClientRect()
+      if (r) centers[c] = r.left + r.width / 2
+    }
+    const r = slotRefs.current[id].getBoundingClientRect()
+    press.current = { id, x0: e.clientX, y0: e.clientY, centers, w: r.width, h: r.height, dragging: false }
+    dragFns.start()
+  }
+  useEffect(() => dragFns.stop, [dragFns])
+
+  const shown = useMemo(() => {
+    const base = order.filter((c) => hand.includes(c))
+    if (!drag || drag.overPile) return base
+    const rest = base.filter((c) => c !== drag.id)
+    rest.splice(drag.index, 0, drag.id)
+    return rest
+  }, [order, handKey, drag?.id, drag?.index, drag?.overPile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const bestCut = useMemo(() => {
     let best = null
@@ -100,7 +191,7 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
     if (m.out[me]) turnText = `Quedaste afuera. Juega ${names[h.turn]}`
     else if (drawPhase) turnText = 'Te toca: robá del mazo o levantá la del pozo'
     else if (discardPhase)
-      turnText = cuts.length ? '¡Podés cortar!' : selected ? null : 'Elegí la carta que vas a tirar'
+      turnText = cuts.length ? '¡Podés cortar!' : selected ? null : 'Tocá la carta que vas a tirar o arrastrala al pozo'
     else turnText = `Juega ${names[h.turn]}`
   }
 
@@ -169,7 +260,10 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
             <span className="pile-label">Mazo ({h.deckCount})</span>
           </button>
           <button
-            className={`pile pile-discard ${canPile || (discardPhase && selected) ? 'is-live' : ''}`}
+            ref={pileRef}
+            className={`pile pile-discard ${canPile || (discardPhase && selected) ? 'is-live' : ''} ${
+              drag?.overPile ? (discardable.includes(drag.id) ? 'is-drop' : 'is-nodrop') : ''
+            }`}
             onClick={() => (canPile ? onAct({ type: 'draw', from: 'discard' }) : discardPhase && discard(selected))}
             disabled={!canPile && !(discardPhase && discardable.includes(selected))}
             aria-label={h.discardTop ? `Pozo: ${cardName(h.discardTop)}` : 'Pozo vacío'}
@@ -198,27 +292,47 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
         </span>
         <ScoreBar score={m.scores[me]} limit={m.limit} />
         <span className="me-loose">
-          {arranged.points === 0 ? 'Todo combinado' : `Sueltas: ${arranged.points}`}
+          {best.points === 0 ? 'Todo combinado' : `Sueltas: ${best.points}`}
         </span>
+        {!isSuggested && (
+          <button className="chip chip-sort" onClick={() => setOrder(suggestion)}>
+            Sugerir orden
+          </button>
+        )}
       </section>
 
-      <section className="my-hand" style={{ '--n': hand.length, '--gaps': `${(arranged.groups.length - 1) * 10}px` }}>
-        {arranged.groups.map((g, gi) => (
-          <div key={gi} className={`hand-group ${gi < arranged.meldCount ? 'is-meld' : 'is-loose'}`}>
-            {g.map((id) => (
-              <Card
-                key={id}
-                id={id}
-                size="hand"
-                selected={selected === id}
-                className={fresh === id ? 'is-fresh' : ''}
-                onClick={discardPhase ? () => setSelected((s) => (s === id ? null : id)) : undefined}
-                disabled={!discardPhase}
-              />
-            ))}
+      <section className={`my-hand ${drag ? 'is-dragging' : ''}`} style={{ '--n': shown.length + (pendingDraw ? 1 : 0) }}>
+        {shown.map((id) => (
+          <div
+            key={id}
+            ref={(el) => (slotRefs.current[id] = el)}
+            className={`hand-slot ${inMeld.has(id) ? 'in-meld' : ''} ${drag?.id === id ? 'is-held' : ''}`}
+            role="button"
+            tabIndex={0}
+            aria-label={`${cardName(id)}${selected === id ? ', elegida' : ''}`}
+            onPointerDown={(e) => onPointerDown(e, id)}
+            onKeyDown={(e) => {
+              if ((e.key === 'Enter' || e.key === ' ') && discardPhase) {
+                e.preventDefault()
+                setSelected((s) => (s === id ? null : id))
+              }
+            }}
+          >
+            <Card id={id} size="hand" selected={selected === id} className={fresh === id ? 'is-fresh' : ''} />
           </div>
         ))}
+        {pendingDraw && (
+          <div className="hand-slot is-pending" aria-label="Recibiendo carta">
+            <Card id={null} size="hand" />
+          </div>
+        )}
       </section>
+      {drag && !drag.overPile && <p className="drag-tip">Soltala donde la quieras, o en el pozo para tirarla</p>}
+      {drag && (
+        <div className="drag-ghost" style={{ left: drag.x - drag.w / 2, top: drag.y - drag.h * 0.7, width: drag.w }}>
+          <Card id={drag.id} size="hand" />
+        </div>
+      )}
 
       <nav className="actions">
         {discardPhase ? (

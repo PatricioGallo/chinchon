@@ -12,7 +12,7 @@ export default function OnlineRoom({ room, profile, people, onBack, onView }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [bubbles, setBubbles] = useState({})
-  const seen = useRef({ handNo: null, len: 0 })
+  const seen = useRef(null)
   const [optimistic, setOptimistic] = useState(null) // jugada propia mostrada antes de que conteste el servidor
   const [deadline, setDeadline] = useState(null)
 
@@ -52,13 +52,12 @@ export default function OnlineRoom({ room, profile, people, onBack, onView }) {
 
   // Globitos: cuando alguien corta o se le acaba el tiempo
   const log = room.match?.log ?? []
-  const handNo = room.match?.handNo
+  const moves = room.match?.moves ?? 0
   useEffect(() => {
     const prev = seen.current
-    const start = prev.handNo === handNo ? prev.len : 0
-    const fresh = log.slice(start).filter((e) => ['cut', 'timeout'].includes(e.t))
-    seen.current = { handNo, len: log.length }
-    if (prev.handNo === null) return // al abrir la sala no repetimos lo viejo
+    seen.current = moves
+    if (prev === null || moves <= prev) return // al abrir la sala no repetimos lo viejo
+    const fresh = log.slice(-Math.min(moves - prev, log.length)).filter((e) => ['cut', 'timeout'].includes(e.t))
     for (const e of fresh) {
       if (e.seat === room.mySeat) continue
       const text = e.t === 'cut' ? '¡Corto!' : 'Se le acabó el tiempo'
@@ -66,7 +65,7 @@ export default function OnlineRoom({ room, profile, people, onBack, onView }) {
       setBubbles((b) => ({ ...b, [e.seat]: { text, id } }))
       setTimeout(() => setBubbles((b) => (b[e.seat]?.id === id ? { ...b, [e.seat]: undefined } : b)), 2200)
     }
-  }, [log.length, handNo]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [moves]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (fn) => {
     setBusy(true)
@@ -92,7 +91,7 @@ export default function OnlineRoom({ room, profile, people, onBack, onView }) {
         <button className="back" onClick={onBack}>
           ‹ Volver
         </button>
-        <h2 className="page-title">{roomTitle(room.players)}</h2>
+        <h2 className="page-title">{roomTitle(room.players, room.limit)}</h2>
         <p className="code-line">
           Código de la sala: <b className="code">{room.code}</b>
         </p>
@@ -164,6 +163,7 @@ export default function OnlineRoom({ room, profile, people, onBack, onView }) {
         names={names}
         bubbles={bubbles}
         onAct={send}
+        pendingDraw={!!match.hand?.pendingDraw}
         onNextHand={() => run(() => api.actRoom(room.id, { type: 'next' }).then(onView).catch(() => {}))}
         timer={{ deadline, total: TURN_MS, onExpire: expire }}
         onRestart={null}
@@ -188,6 +188,12 @@ function predict(view, seat, a) {
     h.drawnFromDiscard = null
     h.turn = nextActive(v, seat)
     v.log = [...v.log, { t: 'discard', seat, card: a.card }]
+    return v
+  }
+  if (a.type === 'draw' && a.from === 'deck') {
+    // La carta todavía no la sabemos: se muestra boca abajo hasta que llega
+    h.deckCount = Math.max(0, h.deckCount - 1)
+    h.pendingDraw = true
     return v
   }
   if (a.type === 'draw' && a.from === 'discard' && h.discardTop) {

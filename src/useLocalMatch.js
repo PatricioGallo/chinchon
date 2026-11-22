@@ -68,7 +68,7 @@ export function useLocalMatch(initial) {
   }, [match, act])
 
   // Tiempo para jugar: si se acaba, la compu juega por vos
-  const myTurnKey = match && legalActions(match, ME).length ? `${match.handNo}-${match.log.length}` : null
+  const myTurnKey = match && legalActions(match, ME).length ? `${match.handNo}-${match.moves ?? match.log.length}` : null
   const [deadline, setDeadline] = useState(null)
   useEffect(() => setDeadline(myTurnKey ? Date.now() + TURN_MS : null), [myTurnKey])
   const expire = () => {
@@ -79,7 +79,7 @@ export function useLocalMatch(initial) {
   const turnTimer = { deadline, total: TURN_MS, onExpire: expire }
 
   const nextHand = () => setMatch((m) => deal(m))
-  const restart = (players) => setMatch(deal(createMatch({ players })))
+  const restart = (players, limit) => setMatch(deal(createMatch({ players, limit })))
   const quit = () => setMatch(null)
 
   return { match, view: match ? viewFor(match, ME) : null, me: ME, act, bubbles, nextHand, restart, quit, timer: turnTimer }
