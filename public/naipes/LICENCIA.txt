@@ -1,0 +1,11 @@
+Naipes de la baraja española: dibujos de Basquetteur (Wikimedia Commons),
+https://commons.wikimedia.org/wiki/User:Basquetteur
+Versión vectorial: https://github.com/gjenkins20/spanish-playing-cards-svg
+
+Licencia: Creative Commons Atribución-CompartirIgual 3.0 (CC BY-SA 3.0)
+https://creativecommons.org/licenses/by-sa/3.0/deed.es
+
+Cambios: se pasaron a imágenes WebP de 300 px de ancho, con fondo blanco y esquinas
+redondeadas, se usan las 48 cartas y el dorso.
+El comodín es un dibujo propio hecho para esta app, en el mismo estilo.
+Estas imágenes se comparten con la misma licencia CC BY-SA 3.0.

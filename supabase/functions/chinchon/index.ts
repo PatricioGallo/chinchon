@@ -1,0 +1,151 @@
+// Servidor del chinchón online (Supabase Edge Function).
+// Reparte, valida cada jugada con el mismo motor que la app y juega la compu.
+// Guarda el estado completo en chinchon_rooms (privado) y a cada jugador
+// le escribe solo su vista en chinchon_views (que le llega en tiempo real).
+//
+// Al desplegar se suben también: server/rooms.js, engine/game.js, engine/cards.js, engine/ai.js
+// La app la llama en la región us-west-2, la misma de la base, para que cada jugada sea rápida.
+
+import { createClient } from 'npm:@supabase/supabase-js@2'
+import {
+  createRoom,
+  joinRoom,
+  declineRoom,
+  startWithCpu,
+  actRoom,
+  timeoutRoom,
+  viewForUser,
+  newCode,
+  invitedUserIds,
+} from './server/rooms.js'
+
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-region',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+
+const URL = Deno.env.get('SUPABASE_URL')!
+const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const admin = createClient(URL, SERVICE, { auth: { persistSession: false } })
+
+class UserError extends Error {}
+
+/** El token ya lo validó Supabase antes de llegar acá (verify_jwt): solo leemos el usuario. */
+function userIdFrom(req: Request): string | null {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return payload.role === 'authenticated' && payload.sub ? payload.sub : null
+  } catch {
+    return null
+  }
+}
+
+async function load(where: { id?: string; code?: string }) {
+  let q = admin.from('chinchon_rooms').select('state')
+  q = where.id ? q.eq('id', where.id) : q.eq('code', String(where.code).toUpperCase())
+  const { data, error } = await q.maybeSingle()
+  if (error) throw error
+  if (!data) throw new UserError('No encontramos esa partida.')
+  return data.state
+}
+
+/** Guarda la sala y la vista de cada invitado en una sola llamada. `prev` evita pisar jugadas simultáneas. */
+async function save(room: any, prev: number | null) {
+  const views = invitedUserIds(room).map((uid: string) => ({ user_id: uid, view: viewForUser(room, uid) }))
+  const { data, error } = await admin.rpc('chinchon_save', {
+    p_id: room.id,
+    p_code: room.code,
+    p_host: room.hostId,
+    p_status: room.status,
+    p_state: room,
+    p_version: room.version,
+    p_prev: prev,
+    p_views: views,
+  })
+  if (error) throw error
+  if (data === false) throw new UserError('Alguien jugó al mismo tiempo. Probá de nuevo.')
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+
+  try {
+    const userId = userIdFrom(req)
+    if (!userId) return json({ error: 'Iniciá sesión para jugar online.' }, 401)
+    const body = await req.json()
+
+    const update = async (fn: (prev: any) => any, where: { id?: string; code?: string }) => {
+      const prev = await load(where)
+      const room = fn(prev)
+      await save(room, prev.version)
+      return json({ view: viewForUser(room, userId) })
+    }
+
+    switch (body.op) {
+      case 'create': {
+        const players = Math.min(6, Math.max(2, Number(body.players) || 2))
+        const seats = Array.isArray(body.seats) ? body.seats.slice(0, players) : []
+        // Solo se puede invitar a amigos
+        const invited = seats.filter((s: any) => s?.userId).map((s: any) => s.userId)
+        if (invited.length) {
+          const { data: friends } = await admin
+            .from('friendships')
+            .select('requester, addressee')
+            .eq('status', 'accepted')
+            .or(`requester.eq.${userId},addressee.eq.${userId}`)
+          const ok = new Set((friends ?? []).map((f: any) => (f.requester === userId ? f.addressee : f.requester)))
+          if (!invited.every((id: string) => ok.has(id))) throw new UserError('Solo podés invitar a tus amigos.')
+        }
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const room = createRoom({ id: crypto.randomUUID(), code: newCode(), hostId: userId, players, seats })
+          try {
+            await save(room, null)
+            return json({ view: viewForUser(room, userId) })
+          } catch (e: any) {
+            if (!String(e?.message).includes('duplicate')) throw e
+          }
+        }
+        throw new UserError('No se pudo crear la sala. Probá de nuevo.')
+      }
+
+      case 'join':
+        return await update((prev) => joinRoom(prev, userId), { id: body.roomId, code: body.code })
+
+      case 'decline': {
+        const prev = await load({ id: body.roomId })
+        await save(declineRoom(prev, userId), prev.version)
+        await admin.from('chinchon_views').delete().eq('room_id', body.roomId).eq('user_id', userId)
+        return json({ ok: true })
+      }
+
+      case 'start':
+        return await update((prev) => startWithCpu(prev, userId), { id: body.roomId })
+
+      case 'act':
+        return await update((prev) => actRoom(prev, userId, body.action), { id: body.roomId })
+
+      case 'timeout':
+        return await update((prev) => timeoutRoom(prev, userId), { id: body.roomId })
+
+      case 'dismiss':
+        await admin.from('chinchon_views').delete().eq('room_id', body.roomId).eq('user_id', userId)
+        return json({ ok: true })
+
+      default:
+        throw new UserError('Operación desconocida')
+    }
+  } catch (e: any) {
+    const isUser =
+      e instanceof UserError ||
+      /inválida|empezó|completa|anfitrión|invitación|no estás|no está en juego|no terminó|todavía hay tiempo|ninguna jugada|se juega de/i.test(
+        e?.message ?? ''
+      )
+    if (!isUser) console.error(e)
+    return json({ error: isUser ? e.message : 'Algo salió mal en el servidor. Probá de nuevo.' }, isUser ? 400 : 500)
+  }
+})
