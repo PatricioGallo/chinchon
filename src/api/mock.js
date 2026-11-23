@@ -249,3 +249,45 @@ export function seedDemo() {
   }
   save(d)
 }
+
+// ---------- Ranking (simulado: mismas reglas que el servidor, sin el límite diario) ----------
+export async function chinchonRanking(scope = 'global', period = 'month') {
+  await net()
+  const d = db()
+  const myId = session()
+  const stats = {}
+  const add = (id, won, pts) => {
+    stats[id] ??= { points: 0, wins: 0, played: 0 }
+    stats[id].points += pts
+    stats[id].played++
+    if (won) stats[id].wins++
+  }
+  for (const room of Object.values(d.rooms)) {
+    if (room.status !== 'finished') continue
+    const m = room.match
+    const present = room.seats.filter((s) => s.type === 'user').map((s) => s.userId)
+    const humans = [...new Set([...present, ...room.seats.filter((s) => s.leftBy).map((s) => s.leftBy)])]
+    if (humans.length < 2) continue
+    const w = room.seats[m.winner]?.type === 'user' ? room.seats[m.winner].userId : null
+    for (const id of humans) {
+      if (id === w) {
+        const ch = m.hand?.result?.chinchon && m.hand.result.cutter === m.winner
+        add(id, true, 10 * (humans.length - 1) + (ch ? 10 : 0) + (m.reenganche[m.winner] ? 0 : 5))
+      } else add(id, false, present.includes(id) ? 1 : 0)
+    }
+  }
+  const friendIds = new Set([
+    myId,
+    ...d.friendships
+      .filter((f) => f.status === 'accepted' && [f.requester, f.addressee].includes(myId))
+      .map((f) => (f.requester === myId ? f.addressee : f.requester)),
+  ])
+  const ids = scope === 'friends' ? [...friendIds] : Object.keys(stats)
+  const rows = ids
+    .filter((id) => d.profiles[id])
+    .map((id) => ({ ...d.profiles[id], user_id: id, ...(stats[id] ?? { points: 0, wins: 0, played: 0 }) }))
+    .sort((a, b) => b.points - a.points || b.wins - a.wins)
+  rows.forEach((r, i) => (r.pos = i > 0 && r.points === rows[i - 1].points && r.wins === rows[i - 1].wins ? rows[i - 1].pos : i + 1))
+  void period
+  return rows
+}

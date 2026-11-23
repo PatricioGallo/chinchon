@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { bestMelds, cardName, isJoker, parseCard, SUITS } from '../engine/cards.js'
-import { CUT_MAX } from '../engine/game.js'
+import { CUT_MAX, roundDone } from '../engine/game.js'
 import Card from './Card.jsx'
 import TurnTimer from './TurnTimer.jsx'
 
@@ -379,7 +379,9 @@ export default function Table({ view, me, actions, names, bubbles = {}, onAct, o
                   }`
                 : cuts.length
                   ? `Cortás tirando ${theCard(cutCard)} y te ${bestCut.pts === 0 ? 'queda todo combinado: menos diez' : `quedan ${bestCut.pts}`}`
-                  : `Para cortar tenés que quedar con ${CUT_MAX} o menos sueltos`}
+                  : !roundDone(m)
+                    ? 'Todavía no se puede cortar: primero tienen que jugar todos una ronda'
+                    : `Para cortar tenés que quedar con ${CUT_MAX} o menos sueltos`}
             </p>
             <div className="action-row">
               <button className="btn btn-call btn-discard" disabled={!discardable.includes(selected)} onClick={() => discard(selected)}>

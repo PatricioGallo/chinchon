@@ -987,3 +987,30 @@ html, body { height: 100%; overflow: hidden; }
 /* La mano nunca más ancha que la pantalla: así las cartas se enciman en vez de salirse */
 .table.chinchon { grid-template-columns: minmax(0, 1fr); }
 .chinchon .my-hand { min-width: 0; width: 100%; overflow: visible; }
+
+/* ---------- Ranking ---------- */
+.ranking { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+.segmented-2 { grid-template-columns: 1fr 1fr; }
+.segmented-soft button { padding: 7px; font-size: 0.9rem; }
+.mode-ranking { background: linear-gradient(160deg, #6a5420, #45360f); }
+.rank-note { margin: 0; }
+.rank-list { gap: 6px; }
+.rank-row {
+  display: grid;
+  grid-template-columns: 2.2em auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 14px;
+}
+.rank-row.is-me { background: rgb(201 162 75 / 0.18); box-shadow: inset 0 0 0 1.5px var(--brass); }
+.rank-pos { font-family: 'Alfa Slab One', serif; font-size: 1.1rem; text-align: center; color: var(--text-dim); }
+.rank-row.is-top1 .rank-pos { color: #f2c94c; font-size: 1.35rem; }
+.rank-row.is-top2 .rank-pos { color: #d7dde3; font-size: 1.25rem; }
+.rank-row.is-top3 .rank-pos { color: #d79b62; font-size: 1.2rem; }
+.rank-points { font-family: 'Alfa Slab One', serif; font-size: 1.2rem; color: var(--brass-2); text-align: right; }
+.rank-points small { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.7rem; font-weight: 700; margin-left: 3px; color: var(--text-dim); }
+.rank-gap { text-align: center; color: var(--text-dim); line-height: 1; }
+.rank-rules-toggle { align-self: center; color: var(--text-dim); font-weight: 700; font-size: 0.92rem; padding: 4px 8px; }
+.rank-rules ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.35; }
+.rank-rules p { margin: 0; }

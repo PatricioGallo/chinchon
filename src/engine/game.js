@@ -6,6 +6,7 @@
 // Suma lo que queda suelto. Cortar sin nada suelto: -10. Chinchón (7 seguidas del mismo palo,
 // sin comodín): gana la partida. Quien pasa los 100 queda afuera, salvo que se reenganche
 // (una vez por jugador): vuelve con el puntaje más alto de los que siguen.
+// No se puede cortar hasta que todos hayan jugado al menos un turno en la mano.
 
 import { newDeck, shuffle, bestMelds, attachCards, isChinchon, cardPoints } from './cards.js'
 
@@ -64,6 +65,7 @@ export function deal(prev, random = Math.random) {
     turn: nextActive(m, m.dealer),
     phase: 'draw', // draw | discard
     drawnFromDiscard: null,
+    discards: 0, // cartas tiradas en la mano (para saber si ya jugaron todos una ronda)
     finished: false,
     result: null,
   }
@@ -76,6 +78,12 @@ const handOf = (m, seat) => (m.hand.hands ? m.hand.hands[seat] : seat === m.me ?
 const discardTop = (m) => (m.hand.discard ? m.hand.discard.at(-1) : m.hand.discardTop) ?? null
 const deckCount = (m) => (m.hand.deck ? m.hand.deck.length : m.hand.deckCount)
 const discardCount = (m) => (m.hand.discard ? m.hand.discard.length : m.hand.discardCount)
+
+/** ¿Ya jugaron todos al menos un turno en esta mano? Antes de eso no se puede cortar. */
+export function roundDone(m) {
+  const d = m.hand?.discards
+  return d === undefined || d >= activeSeats(m).length
+}
 
 /** ¿Puede cortar tirando esta carta? (con 8 cartas en la mano) */
 export function cutInfo(hand, card) {
@@ -95,11 +103,12 @@ export function legalActions(m, seat) {
     return out
   }
   const hand = handOf(m, seat)
+  const canCut = roundDone(m)
   const out = []
   for (const card of hand) {
     // La carta que se levantó del pozo no se puede volver a tirar en el mismo turno
     if (card !== h.drawnFromDiscard) out.push({ type: 'discard', card })
-    if (cutInfo(hand, card).ok) out.push({ type: 'cut', card })
+    if (canCut && cutInfo(hand, card).ok) out.push({ type: 'cut', card })
   }
   return out
 }
@@ -139,6 +148,7 @@ export function apply(prev, seat, action, random = Math.random) {
 
   if (action.type === 'discard') {
     h.discard.push(action.card)
+    h.discards = (h.discards ?? 0) + 1
     h.phase = 'draw'
     h.turn = nextActive(m, seat)
     push(m, { t: 'discard', seat, card: action.card })
@@ -245,6 +255,7 @@ export function viewFor(m, seat) {
       phase: h.phase,
       finished: h.finished,
       drawnFromDiscard: h.drawnFromDiscard,
+      discards: h.discards,
       mine: h.hands[seat] ?? [],
       counts: h.hands.map((x) => x.length),
       deckCount: h.deck.length,

@@ -175,3 +175,9 @@ export function subscribeRooms(myId, cb) {
     .subscribe()
   return () => sb.removeChannel(channel)
 }
+
+// ---------- Ranking ----------
+/** scope: 'global' | 'friends'; period: 'month' | 'all'. Incluye siempre mi fila. */
+export async function chinchonRanking(scope = 'global', period = 'month') {
+  return check(await sb.rpc('chinchon_ranking', { p_scope: scope, p_period: period, lim: 50 }))
+}

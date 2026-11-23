@@ -7,6 +7,7 @@ import { displayName } from './api/shared.js'
 import Table from './components/Table.jsx'
 import Login from './components/Login.jsx'
 import Friends from './components/Friends.jsx'
+import Ranking from './components/Ranking.jsx'
 import NewOnline from './components/NewOnline.jsx'
 import OnlineRoom from './components/OnlineRoom.jsx'
 import Avatar from './components/Avatar.jsx'
@@ -181,6 +182,14 @@ function Main({ profile, setProfile }) {
     )
   }
 
+  if (screen.name === 'ranking') {
+    return withToast(
+      <div className="screen">
+        <Ranking profile={profile} onBack={() => go('home')} />
+      </div>
+    )
+  }
+
   if (screen.name === 'new') {
     return withToast(
       <div className="screen">
@@ -216,6 +225,7 @@ function Main({ profile, setProfile }) {
         onLocal={(players) => (local.restart(players, localLimit), go('local'))}
         onResumeLocal={() => go('local')}
         onFriends={() => go('friends')}
+        onRanking={() => go('ranking')}
         onNew={() => go('new')}
         onProfile={() => go('profile')}
         onOpenRoom={(id) => go('room', { roomId: id })}
@@ -228,7 +238,7 @@ function Main({ profile, setProfile }) {
   )
 }
 
-function Home({ profile, friends, rooms, local, localPlayers, setLocalPlayers, localLimit, setLocalLimit, onLocal, onResumeLocal, onFriends, onNew, onProfile, onOpenRoom, onJoinCode, people, notif, notifHandlers }) {
+function Home({ profile, friends, rooms, local, localPlayers, setLocalPlayers, localLimit, setLocalLimit, onLocal, onResumeLocal, onFriends, onRanking, onNew, onProfile, onOpenRoom, onJoinCode, people, notif, notifHandlers }) {
   const [code, setCode] = useState('')
   const [codeError, setCodeError] = useState('')
   const invites = rooms.filter((r) => r.status === 'waiting' && r.seats[r.mySeat]?.type === 'user' && !r.seats[r.mySeat].joined)
@@ -283,6 +293,10 @@ function Home({ profile, friends, rooms, local, localPlayers, setLocalPlayers, l
             </span>
           </button>
         </div>
+        <button className="mode mode-wide mode-ranking" onClick={onRanking}>
+          <span className="mode-title">🏆 Ranking</span>
+          <span className="mode-sub">Sumá puntos ganando online · global y entre amigos</span>
+        </button>
         <form
           className="code-join"
           onSubmit={async (e) => {
